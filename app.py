@@ -15,13 +15,16 @@ from plotly import graph_objs as go
 # https://datasciencecampus.github.io/deploy-dash-with-gcp/
 # https://www.programonaut.com/7-ways-to-host-your-web-application-for-free/
 # on Heroku https://ekimetrics.github.io/blog/dash-deployment/
+# Render https://www.youtube.com/watch?v=H16dZMYmvqo
 
-# server = app.server
 app = Dash(__name__)  # , external_stylesheets=external_stylesheets
 server = app.server
 app.title = 'Characteristic curve Dashboard'
 # app_color = {"graph_bg": "#082255", "graph_line": "#007ACE"}
-app_color = {"graph_bg": '#79f7d4', "graph_line": "#007ACE"}
+# app_color = {"graph_bg": '#79f7d4', "graph_line": "#007ACE"}
+app_color = {"graph_bg": '#A3E4D7', "graph_line": "#007ACE"}
+app_margins = {'left': 20, 'right': 20, 'top': 20, 'bottom': 20}
+
 app.layout = html.Div([
     html.H1(id='Header', children='Characteristic curve'),
 
@@ -187,7 +190,8 @@ def fit_poly(jsonified_curve, degree):
 
 
 @app.callback(Output('restable', 'figure'),
-              Input('store-meas', 'data'), prevent_initial_call=False)
+              Input('store-meas', 'data'),
+              prevent_initial_call=False)
 def draw_table(jsonified_meas):
     print('Draw table')
     values = [[0, 0, 0], [0, 0, 0]]
@@ -204,16 +208,20 @@ def draw_table(jsonified_meas):
                    height=30)
     )
     fig = go.Figure(data=table)
-    fig.update_layout({'paper_bgcolor': app_color['graph_bg'], 'plot_bgcolor': app_color['graph_bg'],
-                       'margin': dict(t=20, b=20, l=5, r=5)})
+    fig.update_layout({'paper_bgcolor': app_color['graph_bg'],
+                       'plot_bgcolor': app_color['graph_bg'],
+                       'margin': dict(t=app_margins['top'], b=app_margins['bottom'],
+                                      l=app_margins['left'], r=app_margins['right'])})
     # fig.update_traces(cells_font=dict(size=15))
     return fig
 
 
 @app.callback(Output('graph-curve', 'figure'),
               Input('store-fit', 'data'),
-              Input('store-curve', 'data'), prevent_initial_call=False)
-def plot_curve(jsonified_fit, jsonified_curve):
+              Input('store-curve', 'data'),
+              Input('store-meas', 'data'),
+              prevent_initial_call=False)
+def plot_curve(jsonified_fit, jsonified_curve, jsonified_meas):
     print('plot_curve')
     if jsonified_curve is None:
         print('No curve')
@@ -225,10 +233,22 @@ def plot_curve(jsonified_fit, jsonified_curve):
             print('jsonified_fit is not None')
             dff = pd.read_json(jsonified_fit, orient='split')
             fit = np.array(dff[0])
-            x_fit = np.linspace(df['count'].min(), df['count'].max(), 100)
-            fig.add_scatter(x=x_fit, y=np.poly1d(fit)(x_fit), name='fit', showlegend=False)
-    fig.update_layout({'paper_bgcolor': app_color['graph_bg'], 'plot_bgcolor': app_color['graph_bg'],
-                       'margin': dict(t=20, b=20, l=5, r=5), 'font': dict(size=15)})
+            x_fit = np.linspace(df['count'].min(), df['count'].max(), 50)
+            fig.add_scatter(x=x_fit, y=np.poly1d(fit)(x_fit), name='fit', mode='lines',
+                            hoverinfo='skip', line=dict(color='Green'), showlegend=True)
+        if jsonified_meas is not None:
+            dfm = pd.read_json(jsonified_meas, orient='split')
+            xm = dfm['count']
+            ym = dfm['mag']
+            fig.add_scatter(x=xm, y=ym, name='vars', mode='markers',
+                            # marker=dict(color='Orange'),
+                            marker=dict(size=10, color='Orange'),
+                            showlegend=True)
+    fig.update_layout({'paper_bgcolor': app_color['graph_bg'],
+                       'plot_bgcolor': app_color['graph_bg'],
+                       'margin': dict(t=app_margins['top'], b=app_margins['bottom'],
+                                      l=app_margins['left'], r=app_margins['right']),
+                       'font': dict(size=15)})
     print('Figure is ready')
     return fig
 
