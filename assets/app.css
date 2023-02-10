@@ -78,7 +78,7 @@
   .ten.columns                    { width: 82.6666666667%; }
   .eleven.columns                 { width: 91.3333333333%; }
   .twelve.columns                 { width: 100%; margin-left: 0; }
-
+    
   .one-third.column               { width: 30.6666666667%; }
   .two-thirds.column              { width: 65.3333333333%; }
 
@@ -192,7 +192,7 @@ input[type="button"] {
   text-decoration: none;
   white-space: nowrap;
 /*  background-color: transparent; */
-  background-color: #60ccad;
+  background-color: #76D7C4;  /* #60ccad; */
   border-radius: 10px;
 /*  border: 1px solid #bbb; */
   border: 1px solid #555;
