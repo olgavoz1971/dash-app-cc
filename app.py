@@ -1,13 +1,10 @@
-from dash import Dash, html, dcc, Input, Output, State, ctx
+from dash import Dash, html, dcc, Input, Output, State, ctx, dash_table
 from dash.exceptions import PreventUpdate
 import base64
 import io
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from plotly import graph_objs as go
-
-# from dash import dash_table
 
 # external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 # https://dash.plotly.com/deployment
@@ -66,11 +63,31 @@ app.layout = html.Div([
             html.Div(
                 [
                     html.H5('Table', className='graph__title'),
-                    dcc.Graph(id='restable')
+                    # https://dash.plotly.com/datatable/data-formatting
+                    dash_table.DataTable(
+                        id='interactive-table',
+                        columns=[{'name': 'count', 'id': 'count', 'type': 'numeric',
+                                  'format': dash_table.Format.Format(precision=2,
+                                                                     scheme=dash_table.Format.Scheme.fixed)
+                                  },
+                                 {'name': 'mag', 'id': 'mag', 'type': 'numeric',
+                                  'format': dash_table.Format.Format(precision=3,
+                                                                     scheme=dash_table.Format.Scheme.fixed)
+                                  }],
+                        # page_action='none',
+                        page_size=100,
+                        style_cell={'fontSize': 20, 'height': 30, 'textAlign': 'center'},
+                        style_header={'backgroundColor': 'paleturquoise', 'fontWeight': 'bold'},
+                        style_data={'backgroundColor': 'lavender'},
+                        # style_table={'overflowY': 'auto'},
+                        style_table={'height': '450px', 'overflowY': 'auto'},
+                        fixed_rows={'headers': True},
+
+                    )
+                    # dcc.Graph(id='restable')
                 ],
                 className='one-third column wind__speed__container',
-                # className='one-third column histogram__direction',
-            )
+            ),
         ],
         className="app__content",
     ),
@@ -83,23 +100,16 @@ app.layout = html.Div([
 
 
 def parse_curve(contents):
-    print('parse_curve', contents)
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
-    print('decoded =', decoded)
-    # df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
     df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), comment='#', header=None, names=['count', 'mag'])
     return df
 
 
 def parse_meas(contents):
-    print('parse_meas', contents)
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
-    print('decoded =', decoded)
-    # df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
     df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), comment='#', header=None, names=['count', 'mag'])
-    print(df)
     return df
 
 
@@ -122,11 +132,8 @@ def handle_meas(uploaded_meas, jsonified_fit, jsonified_meas):
         if jsonified_meas is None:  # get it from store-meas
             print('jsonified_meas is None')
             raise PreventUpdate
-        print('jsonified_meas =', jsonified_meas)
         dfm = pd.read_json(jsonified_meas, orient='split')
-        print('dfm =', dfm)
 
-    print('apply-fit')
     if jsonified_fit is not None:
         dff = pd.read_json(jsonified_fit, orient='split')
         fit = np.array(dff[0])
@@ -159,15 +166,11 @@ def update_curve(jsonified_curve_back, _, click_data, jsonified_curve):
         print('graph-curve has been clicked')
         if click_data['points'][0]['curveNumber'] != 0:
             raise PreventUpdate
-        print('clickData =', click_data)
-        print(click_data['points'][0]['x'], click_data['points'][0]['y'])
         df = pd.read_json(jsonified_curve, orient='split')
         df.drop(index=click_data['points'][0]['pointIndex'], inplace=True)
         df.reset_index(drop=True, inplace=True)
         return df.to_json(orient='split')
-    if ctx.triggered_id == 'btn-restore':  # restore curve from the safe-box
-        print('BTN-RESTORE PRESSED')
-        print(jsonified_curve_back)
+    # if ctx.triggered_id == 'btn-restore':  # restore curve from the safe-box
     return jsonified_curve_back  # restore curve
 
 
@@ -183,45 +186,31 @@ def fit_poly(jsonified_curve, degree):
         raise PreventUpdate
     df = pd.read_json(jsonified_curve, orient='split')
     fit = np.polyfit(df['count'], df['mag'], int(degree))
-    print(fit)
     dff = pd.DataFrame(fit)
     print('Jsonification of fit')
     return dff.to_json(orient='split')
 
 
-@app.callback(Output('restable', 'figure'),
+@app.callback(Output('interactive-table', 'data'),
               Input('store-meas', 'data'),
               prevent_initial_call=False)
 def draw_table(jsonified_meas):
-    print('Draw table')
-    values = [[0, 0, 0], [0, 0, 0]]
     if jsonified_meas is not None:
         df = pd.read_json(jsonified_meas, orient='split')
-        values = [df['count'], df['mag']]
-    table = go.Table(
-        header=dict(values=['count', 'mag'], fill_color='paleturquoise', align='left', font=dict(size=15)),
-        cells=dict(values=values,
-                   format=('.3f', '.3f'),
-                   fill_color='lavender',
-                   align=['left', 'left'],
-                   font=dict(size=15),
-                   height=30)
-    )
-    fig = go.Figure(data=table)
-    fig.update_layout({'paper_bgcolor': app_color['graph_bg'],
-                       'plot_bgcolor': app_color['graph_bg'],
-                       'margin': dict(t=app_margins['top'], b=app_margins['bottom'],
-                                      l=app_margins['left'], r=app_margins['right'])})
-    # fig.update_traces(cells_font=dict(size=15))
-    return fig
+        # values = [df['count'], df['mag']]
+        data = df.to_dict('records')
+    else:
+        raise PreventUpdate
+    return data
 
 
 @app.callback(Output('graph-curve', 'figure'),
               Input('store-fit', 'data'),
               Input('store-curve', 'data'),
               Input('store-meas', 'data'),
+              Input('interactive-table', 'active_cell'),
               prevent_initial_call=False)
-def plot_curve(jsonified_fit, jsonified_curve, jsonified_meas):
+def plot_curve(jsonified_fit, jsonified_curve, jsonified_meas, active_cell):
     print('plot_curve')
     if jsonified_curve is None:
         print('No curve')
@@ -244,6 +233,13 @@ def plot_curve(jsonified_fit, jsonified_curve, jsonified_meas):
                             # marker=dict(color='Orange'),
                             marker=dict(size=10, color='Orange'),
                             showlegend=True)
+            if active_cell:
+                xms = dfm.iloc[active_cell['row']]['count']
+                yms = dfm.iloc[active_cell['row']]['mag']
+                fig.add_scatter(x=[xms], y=[yms], name='selected', mode='markers',
+                                marker=dict(size=15, color='yellow'),
+                                showlegend=True)
+
     fig.update_layout({'paper_bgcolor': app_color['graph_bg'],
                        'plot_bgcolor': app_color['graph_bg'],
                        'margin': dict(t=app_margins['top'], b=app_margins['bottom'],
@@ -270,4 +266,4 @@ def download_meas(_, jsonified_meas):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run(debug=True)
